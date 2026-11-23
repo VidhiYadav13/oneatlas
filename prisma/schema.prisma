@@ -1,0 +1,111 @@
+// Prisma schema for OneAtlas AI Intelligence Platform
+// Supports PostgreSQL (default for production Neon/Railway/Render) and SQLite for local evaluation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Lab {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  name            String
+  logo            String
+  description     String
+  website         String
+  headquarters    String
+  foundedYear     Int
+  isVerified      Boolean  @default(true)
+  models          Model[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Provider {
+  id                  String          @id @default(cuid())
+  slug                String          @unique
+  name                String
+  logo                String
+  website             String
+  description         String
+  uptimePercent       Float           @default(99.9)
+  avgLatencyMs        Int             @default(320)
+  avgThroughputTokSec Int             @default(85)
+  status              String          @default("operational")
+  supportedProtocols  String          // JSON array string e.g. ["openai", "anthropic", "litellm"]
+  modelProviders      ModelProvider[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model Model {
+  id                    String          @id @default(cuid())
+  slug                  String          @unique
+  name                  String
+  description           String
+  architecture          String          // e.g. "Dense Transformer", "Mixture-of-Experts (MoE)"
+  releaseDate           String
+  labId                 String
+  lab                   Lab             @relation(fields: [labId], references: [id])
+  type                  String          // "multimodal", "text-only", "reasoning", "code"
+  license               String          // "Proprietary", "Open Weights (Apache-2.0)", etc.
+  isOpenWeights         Boolean         @default(false)
+  isFeatured            Boolean         @default(false)
+  isTrending            Boolean         @default(false)
+  isNew                 Boolean         @default(false)
+  contextWindow         Int             // in tokens (e.g. 128000, 200000, 1000000)
+  maxOutputTokens       Int             // in tokens (e.g. 4096, 8192, 16384)
+  inputPricePerM        Float           // $ per 1M tokens
+  outputPricePerM       Float           // $ per 1M tokens
+  cachedPricePerM       Float?          // $ per 1M tokens (prompt caching)
+  batchDiscountPercent  Int?            @default(50)
+  modalities            String          // JSON array string e.g. ["text", "vision", "code"]
+  capabilities          String          // JSON array string e.g. ["reasoning", "tool_use", "json_mode"]
+  providers             ModelProvider[]
+  benchmarks            BenchmarkResult[]
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model ModelProvider {
+  id              String   @id @default(cuid())
+  modelId         String
+  providerId      String
+  model           Model    @relation(fields: [modelId], references: [id])
+  provider        Provider @relation(fields: [providerId], references: [id])
+  inputPricePerM  Float
+  outputPricePerM Float
+  latencyP50Ms    Int
+  latencyP95Ms    Int
+  throughputTokSec Int
+  isDefault       Boolean  @default(false)
+  uptimePercent   Float    @default(99.9)
+
+  @@unique([modelId, providerId])
+}
+
+model BenchmarkMetric {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  name        String
+  category    String            // "Reasoning", "Coding", "General Knowledge", "Math"
+  description String
+  maxScore    Float             @default(100.0)
+  results     BenchmarkResult[]
+}
+
+model BenchmarkResult {
+  id         String          @id @default(cuid())
+  modelId    String
+  metricSlug String
+  score      Float
+  rank       Int?
+  model      Model           @relation(fields: [modelId], references: [id])
+  metric     BenchmarkMetric @relation(fields: [metricSlug], references: [slug])
+
+  @@unique([modelId, metricSlug])
+}
